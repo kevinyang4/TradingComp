@@ -55,11 +55,18 @@ tail_window = returns[winners]. tail(LOOKBACK_TAIL)
 skew = tail_window.skew()
 kurt = tail_window.kurt()
 
-alpha_kurt = 0.2
-alpha_skew = 0.5
-
 neg_skew = (-skew).clip(lower=0) #penalizing
 pos_kurt = kurt.clip(lower=0)
+
+k90 = pos_kurt.quantile(0.90)
+k90 = neg_skew.quantile(0.90)
+
+#target each tail component to contribute ~0.5 at the 90th percentile
+alpha_kurt = 0.5 / k90 if k90 > 0 else 0.0
+alpha_skew = 0.5 / s90 if s90 > 0 else 0.0
+
+print("Suggested ALPHA_KURT:", alpha_kurt)
+print("Suggested ALPHA_SKEW:", alpha_skew)
 
 penalty = 1 + alpha_skew * pos_kurt + alpha_kurt * neg_skew
 
