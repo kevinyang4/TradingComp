@@ -21,6 +21,7 @@ UNIVERSE = [
 
 LOOKBACK_MOMENTUM = 126   # 6 months
 LOOKBACK_VOL = 20        # 1 month
+LOOKBACK_TAIL = 60 # 3 months (skewness & kurtosis)
 TOP_N = 5
 CAPITAL = 100_000
 
@@ -45,17 +46,30 @@ print("\nTop momentum stocks:")
 print(momentum.head(TOP_N))
 
 # ===============================
-# VOLATILITY
+# VOLATILITY / SKEWNESS / KURTOSIS
 # ===============================
 
 returns = prices.pct_change().dropna()
 vol = returns[winners].tail(LOOKBACK_VOL).std() * np.sqrt(252)
+tail_window = returns[winners]. tail(LOOKBACK_TAIL)
+skew = tail_window.skew()
+kurt = tail_window.kurt()
+
+alpha_kurt = 0.2
+alpha_skew = 0.5
+
+neg_skew = (-skew).clip(lower=0) #penalizing
+pos_kurt = kurt.clip(lower=0)
+
+penalty = 1 + alpha_skew * pos_kurt + alpha_kurt * neg_skew
+
+effective_risk = vol * penalty
 
 # ===============================
 # VOL-SCALED WEIGHTS
 # ===============================
 
-inv_vol = 1 / vol
+inv_vol = 1 / effective_risk
 weights = inv_vol / inv_vol.sum()
 
 print("\nVolatility-scaled weights:")
