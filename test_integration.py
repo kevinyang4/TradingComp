@@ -30,7 +30,7 @@ CAPITAL = 100_000
 # ===============================
 
 print("Downloading price data...")
-prices = yf.download(UNIVERSE, period="1y")["Close"]
+prices = yf.download(UNIVERSE, period="1y", auto_adjust = True)["Close"]
 prices = prices.dropna()
 
 # ===============================
