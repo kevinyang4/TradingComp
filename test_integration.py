@@ -21,8 +21,8 @@ UNIVERSE = [
 
 LOOKBACK_MOMENTUM = 126   # 6 months
 LOOKBACK_VOL = 20        # 1 month
-LOOKBACK_TAIL = 60 # 3 months (skewness & kurtosis)
-TOP_N = 5
+N_LONG = 5
+N_SHORT = 5
 CAPITAL = 100_000
 
 # ===============================
@@ -30,7 +30,7 @@ CAPITAL = 100_000
 # ===============================
 
 print("Downloading price data...")
-prices = yf.download(UNIVERSE, period="1y")["Adj Close"]
+prices = yf.download(UNIVERSE, period="1y")["Close"]
 prices = prices.dropna()
 
 # ===============================
@@ -38,57 +38,60 @@ prices = prices.dropna()
 # ===============================
 
 momentum = prices.iloc[-1] / prices.iloc[-LOOKBACK_MOMENTUM] - 1
-momentum = momentum.sort_values(ascending=False)
+momentum = momentum.dropna().sort_values(ascending=False)
 
-winners = momentum.head(TOP_N).index.tolist()
+longs = momentum.head(N_LONG).index.tolist()
+shorts = momentum.tail(N_SHORT).index.tolist()
 
-print("\nTop momentum stocks:")
-print(momentum.head(TOP_N))
+print("\nTop momentum (LONG):")
+print(momentum.loc[longs])
+
+print("\nBottom momentum (SHORT):")
+print(momentum.loc[shorts])
 
 # ===============================
-# VOLATILITY / SKEWNESS / KURTOSIS
+# VOLATILITY
 # ===============================
 
 returns = prices.pct_change().dropna()
-vol = returns[winners].tail(LOOKBACK_VOL).std() * np.sqrt(252)
-tail_window = returns[winners]. tail(LOOKBACK_TAIL)
-skew = tail_window.skew()
-kurt = tail_window.kurt()
-
-neg_skew = (-skew).clip(lower=0) #penalizing
-pos_kurt = kurt.clip(lower=0)
-
-k90 = pos_kurt.quantile(0.90)
-k90 = neg_skew.quantile(0.90)
-
-#target each tail component to contribute ~0.5 at the 90th percentile
-alpha_kurt = 0.5 / k90 if k90 > 0 else 0.0
-alpha_skew = 0.5 / s90 if s90 > 0 else 0.0
-
-print("Suggested ALPHA_KURT:", alpha_kurt)
-print("Suggested ALPHA_SKEW:", alpha_skew)
-
-penalty = 1 + alpha_skew * pos_kurt + alpha_kurt * neg_skew
-
-effective_risk = vol * penalty
+vol_long = returns[longs].tail(LOOKBACK_VOL).std() * np.sqrt(252)
+vol_short = returns[shorts].tail(LOOKBACK_VOL).std() * np.sqrt(252)
 
 # ===============================
 # VOL-SCALED WEIGHTS
 # ===============================
 
-inv_vol = 1 / effective_risk
-weights = inv_vol / inv_vol.sum()
+inv_vol_long = 1/vol_long
+inv_vol_short = 1/vol_short
 
-print("\nVolatility-scaled weights:")
-print(weights)
+den = inv_vol_long.sum() + inv_vol_short.sum()
+
+w_long  = inv_vol_long / den
+w_short = inv_vol_short / den
+
+gross_budget = CAPITAL  # total gross you want deployed
+
+target_long_dollars  = w_long  * gross_budget
+target_short_dollars = w_short * gross_budget
+
+print("\nTotal long weight:", float(w_long.sum()))
+print("Total short weight:", float(w_short.sum()))
+print("Implied net exposure (long - short):", float(w_long.sum() - w_short.sum()))
 
 # ===============================
 # POSITION SIZES
 # ===============================
 
-latest_prices = prices.iloc[-1][winners]
-target_dollars = weights * CAPITAL
-target_shares = (target_dollars / latest_prices).astype(int)
+latest_prices_long = prices.iloc[-1][longs]
+latest_prices_short = prices.iloc[-1][shorts]
+
+target_long_shares = (target_long_dollars / latest_prices_long).astype(int)
+target_short_shares = (target_short_dollars / latest_prices_short).astype(int)
+
+target_short_shares = -target_short_shares
+
+# Combine into one Series
+target_shares = pd.concat([target_long_shares, target_short_shares])
 
 # ===============================
 # BUILD ORDERS
