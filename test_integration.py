@@ -69,7 +69,7 @@ den = inv_vol_long.sum() + inv_vol_short.sum()
 w_long  = inv_vol_long / den
 w_short = inv_vol_short / den
 
-gross_budget = CAPITAL  # total gross you want deployed
+gross_budget = CAPITAL
 
 target_long_dollars  = w_long  * gross_budget
 target_short_dollars = w_short * gross_budget
